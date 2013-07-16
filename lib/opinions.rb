@@ -25,9 +25,10 @@ module Opinions
     end
 
     def key
+      object_id = @object.id
       object = @object.dup
       object.class.send(:include, KeyBuilderExtensions)
-      key = object.generate_key(@opinion, object.id)
+      key = object.generate_key(@opinion, object_id)
       if @target
         tcn = @target.class == Class ? @target.name : @target.class.name
         key += ":#{tcn}"
@@ -47,10 +48,16 @@ module Opinions
       Opinions.backend.read_key(key_name).collect do |object_id, time|
         target_class_name, opinion, target_id, object_class_name = key_name.split ':'
         target_class, object_class = Kernel.const_get(target_class_name), Kernel.const_get(object_class_name)
-        Opinion.new(target: (@direction == :to ? object_class.find(object_id) : target_class.find(target_id)),
-                    object: (@direction == :to ? target_class.find(target_id) : object_class.find(object_id)),
-                    opinion: opinion.to_sym,
-                    created_at: time)
+        begin 
+          object_instance = object_class.find(object_id)
+          target_instance = target_class.find(target_id)
+          Opinion.new(target: (@direction == :to ? object_instance : target_instance),
+                      object: (@direction == :to ? target_instance : object_instance),
+                      opinion: opinion.to_sym,
+                      created_at: time)
+        rescue
+          nil
+        end   
       end
     end
   end
@@ -80,6 +87,14 @@ module Opinions
 
     def read_sub_key(key_name, key)
       redis.hget(key_name, key)
+    end
+
+    def remove_keys(keys)
+      redis.multi do
+        keys.each do |key_name|
+          redis.del(key_name)
+        end
+      end
     end
 
     def remove_sub_keys(key_pairs)
@@ -112,6 +127,25 @@ module Opinions
         @object_id.to_i == @object_id ? @object_id : @object_id.to_i
       end
 
+  end
+
+  class OpinionRemover
+
+    def self.remove(target)
+      false unless target.class.instance_variable_defined? :@registered_opinions      
+      (target.class.instance_variable_get :@registered_opinions).each do |opinion|
+        lookup_key_builder = KeyBuilder.new(object: target, opinion: opinion)
+        keys = Opinions.backend.keys_matching(lookup_key_builder.key + "*")
+        keys.collect do |key_name|
+          Opinions.backend.read_key(key_name).collect do |object_id, time|
+            target_class_name, opinion, target_id, object_class_name = key_name.split ':'
+            opposite_key_name = [object_class_name, opinion, object_id, target_class_name].compact.join(':')
+            Opinions.backend.remove_sub_keys([[opposite_key_name, target_id]])
+          end
+          Opinions.backend.remove_keys([key_name])
+        end
+      end
+    end
   end
 
   class Opinion
@@ -171,100 +205,100 @@ module Opinions
     class << self
 
       def included(klass)
-        klass.send(:include, InstanceMethods)
         klass.send(:extend,  ClassMethods)
       end
 
     end
 
     module ClassMethods
+
       def opinions(*opinions)
         opinions.each { |opinion| register_opinion(opinion.to_sym) }
       end
-      def register_opinion(name)
-        @registered_opinions ||= Array.new
-        @registered_opinions <<  name
-      end
+
       def registered_opinions
         @registered_opinions
       end
-    end
 
-    module InstanceMethods
+      def register_opinion(opinion)
+        @registered_opinions ||= Array.new
+        @registered_opinions <<  opinion
+        
+        self.send :define_method, :"#{opinion}_by" do |*args|
+          opinionated, time = *args
+          time              = time || Time.now.utc
+          e = Opinion.new(object: opinionated, target: self, opinion: opinion)
+          true & e.persist(time: time)
+        end
 
-      def initialize(*args)
-        super
-        self.class.registered_opinions.each do |opinion|
-          self.class.send :define_method, :"#{opinion}_by" do |*args|
-            opinionated, time = *args
-            time              = time || Time.now.utc
-            e = Opinion.new(object: opinionated, target: self, opinion: opinion)
-            true & e.persist(time: time)
-          end
-          self.class.send :define_method, :"cancel_#{opinion}_by" do |opinionated|
-            true & Opinion.new(object: opinionated, target: self, opinion: opinion).remove
-          end
-         self.class.send :define_method, :"#{opinion}_votes" do
-           lookup_key_builder = KeyBuilder.new(object: self, opinion: opinion)
-           keys = Opinions.backend.keys_matching(lookup_key_builder.key + "*")
-           keys.collect do |key_name|
-             OpinionFactory.new(from_target: key_name).opinion
-           end.flatten
-         end
+        self.send :define_method, :"cancel_#{opinion}_by" do |opinionated|
+          true & Opinion.new(object: opinionated, target: self, opinion: opinion).remove
+        end
+
+        self.send :define_method, :"#{opinion}_votes" do
+          lookup_key_builder = KeyBuilder.new(object: self, opinion: opinion)
+          keys = Opinions.backend.keys_matching(lookup_key_builder.key + "*")
+          keys.collect do |key_name|
+            OpinionFactory.new(from_target: key_name).opinion
+          end.flatten.compact
+        end
+        
+        self.send :define_method, :"remove_votes" do
+          true & OpinionRemover.remove( self )
         end
       end
-
     end
-
   end
 
   module Opinionated
 
     def self.included(klass)
-      klass.send(:include, InstanceMethods)
       klass.send(:extend,  ClassMethods)
     end
 
     module ClassMethods
+
       def opinions(*opinions)
         opinions.each { |opinion| register_opinion(opinion.to_sym) }
       end
-      def register_opinion(name)
-        @registered_opinions ||= Array.new
-        @registered_opinions <<  name
-      end
+
       def registered_opinions
         @registered_opinions
       end
-    end
 
-    module InstanceMethods
-      def initialize(*args)
-        super
-        self.class.registered_opinions.each do |opinion|
-          self.class.send :define_method, :"#{opinion}" do |*args|
-            target, time = *args
-            time         = time || Time.now.utc
-            e = Opinion.new(object: self, target: target, opinion: opinion)
-            true & e.persist(time: time)
-          end
-          self.class.send :define_method, :"cancel_#{opinion}" do |pollable|
-            true & Opinion.new(object: self, target: pollable, opinion: opinion).remove
-          end
-          self.class.send :define_method, :"have_#{opinion}_on" do |pollable|
-            send("#{opinion}_opinions").collect { |o| o.target == pollable }.any?
-          end
-          self.class.send :define_method, :"#{opinion}_opinions" do
-            lookup_key_builder = KeyBuilder.new(object: self, opinion: opinion)
-            keys = Opinions.backend.keys_matching(lookup_key_builder.key + "*")
-            keys.collect do |key_name|
-              OpinionFactory.new(from_object: key_name).opinion
-            end.flatten
-          end
+      def register_opinion(opinion)
+        @registered_opinions ||= Array.new
+        @registered_opinions <<  opinion
+
+        self.send :define_method, :"#{opinion}" do |*args|
+          target, time = *args
+          time         = time || Time.now.utc
+          e = Opinion.new(object: self, target: target, opinion: opinion)
+          true & e.persist(time: time)
+        end
+
+        self.send :define_method, :"cancel_#{opinion}" do |pollable|
+          true & Opinion.new(object: self, target: pollable, opinion: opinion).remove
+        end
+
+        self.send :define_method, :"have_#{opinion}_on" do |pollable|
+          send("#{opinion}_opinions").collect { |o| o.target == pollable }.any?
+        end
+
+        self.send :define_method, :"#{opinion}_opinions" do
+          lookup_key_builder = KeyBuilder.new(object: self, opinion: opinion)
+          keys = Opinions.backend.keys_matching(lookup_key_builder.key + "*")
+          keys.collect do |key_name|
+            OpinionFactory.new(from_object: key_name).opinion
+          end.flatten.compact
+        end
+
+        self.send :define_method, :"remove_opinions" do
+          true & OpinionRemover.remove(self)
         end
       end
-    end
 
+    end
   end
 
 end
