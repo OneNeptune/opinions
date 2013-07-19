@@ -243,6 +243,14 @@ module Opinions
           end.flatten.compact
         end
         
+        self.send :define_method, :"#{opinion}_votes_count" do
+          lookup_key_builder = KeyBuilder.new(object: self, opinion: opinion)
+          keys = Opinions.backend.keys_matching(lookup_key_builder.key + "*")
+          keys.collect do |key_name|
+            Opinions.backend.read_key(key_name).collect.count
+          end.sum
+        end
+        
         self.send :define_method, :"remove_votes" do
           true & OpinionRemover.remove( self )
         end
@@ -291,6 +299,14 @@ module Opinions
           keys.collect do |key_name|
             OpinionFactory.new(from_object: key_name).opinion
           end.flatten.compact
+        end
+
+        self.send :define_method, :"#{opinion}_opinions_count" do
+          lookup_key_builder = KeyBuilder.new(object: self, opinion: opinion)
+          keys = Opinions.backend.keys_matching(lookup_key_builder.key + "*")
+          keys.collect do |key_name|
+             Opinions.backend.read_key(key_name).collect.count
+          end.sum
         end
 
         self.send :define_method, :"remove_opinions" do
