@@ -273,12 +273,15 @@ module Opinions
         self.send :define_method, :"#{opinion}" do |*args|
           target, time = *args
           time         = time || Time.now.utc
-          e = Opinion.new(object: self, target: target, opinion: opinion)
-          true & e.persist(time: time)
+          opinion_instance = Opinion.new(object: self, target: target, opinion: opinion)
+          backend_opinion = opinion_instance.persist(time: time)
+          opinion_instance if backend_opinion.present?
         end
 
         self.send :define_method, :"cancel_#{opinion}" do |pollable|
-          true & Opinion.new(object: self, target: pollable, opinion: opinion).remove
+          opinion_instance = Opinion.new(object: self, target: pollable, opinion: opinion)
+          backend_opinion = opinion_instance.remove
+          opinion_instance if backend_opinion.present?
         end
 
         self.send :define_method, :"have_#{opinion}_on" do |pollable|
