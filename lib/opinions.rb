@@ -288,8 +288,8 @@ module Opinions
           send("#{opinion}_opinions").collect { |o| o.target == pollable }.any?
         end
 
-        self.send :define_method, :"#{opinion}_opinions" do
-          lookup_key_builder = KeyBuilder.new(object: self, opinion: opinion)
+        self.send :define_method, :"#{opinion}_opinions" do |pollable = nil|
+          lookup_key_builder = KeyBuilder.new(object: self, opinion: opinion, target: pollable)
           keys = Opinions.backend.keys_matching(lookup_key_builder.key + "*")
           keys.collect do |key_name|
             OpinionFactory.new(from_object: key_name).opinion
