@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require 'rubygems'
 require 'bundler'
 
@@ -22,18 +24,16 @@ Turn.config do |tc|
 end
 
 IntegrationTestRedis = DaemonController.new(
-  identifier:    "Opinions Ingration Test Redis Server",
+  identifier: 'Opinions Ingration Test Redis Server',
   start_command: "redis-server #{File.expand_path('./opinions_integration_test_redis.conf', 'test')}",
-  ping_command:  [:tcp, '127.0.0.1', 9738],
-  pid_file:      "/tmp/opinions_integration_test_redis.pid",
-  log_file:      "/tmp/opinions_integration_test_redis.log",
+  ping_command: [:tcp, '127.0.0.1', 9738],
+  pid_file: '/tmp/opinions_integration_test_redis.pid',
+  log_file: '/tmp/opinions_integration_test_redis.log',
   start_timeout: 2
 )
 
 module Opinions
-
   module MiniTest
-
     class Unit
       TestCase = Class.new(::MiniTest::Unit::TestCase)
     end
@@ -45,19 +45,17 @@ module Opinions
     class Integration
       TestCase = Class.new(Acceptance::TestCase)
     end
-
   end
-
 end
 
 Opinions::MiniTest::Unit::TestCase.class_eval do
-
   def setup_with_clean_objects
     setup_without_clean_objects
     instance_methods = Module.new do
       def ==(other)
         id == other.id
       end
+
       def initialize(id = nil)
         @id = id
       end
@@ -76,21 +74,19 @@ Opinions::MiniTest::Unit::TestCase.class_eval do
     ::ExampleObject.send(:extend, class_methods)
     ::ExampleTarget.send(:extend, class_methods)
   end
-  alias :setup_without_clean_objects :setup
-  alias :setup :setup_with_clean_objects
+  alias_method :setup_without_clean_objects, :setup
+  alias_method :setup, :setup_with_clean_objects
 
   def teardown_with_clean_objects
     teardown_without_clean_objects
     Object.send(:remove_const, :ExampleObject)
     Object.send(:remove_const, :ExampleTarget)
   end
-  alias :teardown_without_clean_objects :teardown
-  alias :teardown :teardown_with_clean_objects
-
+  alias_method :teardown_without_clean_objects, :teardown
+  alias_method :teardown, :teardown_with_clean_objects
 end
 
 Opinions::MiniTest::Integration::TestCase.class_eval do
-
   def setup_with_live_redis
     setup_without_live_redis
     ::IntegrationTestRedis.start
@@ -99,14 +95,13 @@ Opinions::MiniTest::Integration::TestCase.class_eval do
     rb.redis.flushdb
     Opinions.backend = rb
   end
-  alias :setup_without_live_redis :setup
-  alias :setup :setup_with_live_redis
+  alias_method :setup_without_live_redis, :setup
+  alias_method :setup, :setup_with_live_redis
 
   def teardown_with_live_redis
     teardown_without_live_redis
     ::IntegrationTestRedis.stop
   end
-  alias :teardown_without_live_redis :teardown
-  alias :teardown :teardown_with_live_redis
-
+  alias_method :teardown_without_live_redis, :teardown
+  alias_method :teardown, :teardown_with_live_redis
 end

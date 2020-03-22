@@ -1,9 +1,9 @@
+# frozen_string_literal: true
+
 require 'test_helper'
 
 module Opinions
-
   class UnitTestOpinion < MiniTest::Unit::TestCase
-
     def test_an_argument_error_is_raised_when_instantiated_without_a_target
       assert_raises KeyError do
         Opinion.new(object: true, opinion: true)
@@ -23,7 +23,8 @@ module Opinions
     end
 
     def test_opinions_with_the_same_properties_compare_equal
-      o, t = Class.new, Class.new
+      o = Class.new
+      t = Class.new
       opinion_one = Opinion.new(opinion: :test, target: t, object: o)
       opinion_two = Opinion.new(opinion: :test, target: t, object: o)
       assert_equal opinion_one, opinion_two
@@ -66,7 +67,5 @@ module Opinions
       opinion = Opinion.new(object: example_object, target: example_target, opinion: :example)
       assert_equal 'ExampleObject:example:123:ExampleTarget', opinion.object_key
     end
-
   end
-
 end

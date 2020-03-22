@@ -1,12 +1,12 @@
+# frozen_string_literal: true
+
 require 'test_helper'
 
 module Opinions
-
   class UnitTestKeyBuilder < MiniTest::Unit::TestCase
-
     def test_an_argument_error_is_raised_when_instantiated_with_an_empty_hash
       assert_raises KeyError do
-         KeyBuilder.new({})
+        KeyBuilder.new({})
       end
     end
 
@@ -18,7 +18,7 @@ module Opinions
 
     def test_generating_a_key_with_a_non_numerical_id
       example_instance = ::ExampleObject.new
-      example_instance.id = "digest"
+      example_instance.id = 'digest'
       assert_equal 'ExampleObject:test:digest', KeyBuilder.new(object: example_instance, opinion: :test).key
     end
 
@@ -50,7 +50,5 @@ module Opinions
       example_target.id = 456
       assert_equal 'ExampleObject:absolute_hate:123:ExampleTarget', KeyBuilder.new(object: example_object, opinion: :absolute_hate, target: example_target).key
     end
-
   end
-
 end

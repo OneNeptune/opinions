@@ -1,15 +1,14 @@
+# frozen_string_literal: true
+
 require 'test_helper'
 
 module Opinions
-
   class IntegrationTestOpinionsPollable < MiniTest::Integration::TestCase
-
     def test_being_voted_by_any_conforming_object
-
       example_object = ExampleObject.new
       example_object.id = 123
 
-      ExampleTarget.send(:include, Pollable)
+      ExampleTarget.include Pollable
       ExampleTarget.send(:opinions, :example)
 
       example_target = ExampleTarget.new
@@ -18,15 +17,13 @@ module Opinions
       example_target.example_by(example_object)
 
       assert Opinion.new(target: example_target, object: example_object, opinion: :example).exists?
-
     end
 
     def test_cancelling_a_vote_by_any_conforming_object
-
       example_object = ExampleObject.new
       example_object.id = 123
 
-      ExampleTarget.send(:include, Pollable)
+      ExampleTarget.include Pollable
       ExampleTarget.send(:opinions, :example)
 
       example_target = ExampleTarget.new
@@ -38,18 +35,16 @@ module Opinions
       example_target.cancel_example_by(example_object)
 
       refute Opinion.new(target: example_target, object: example_object, opinion: :example).exists?
-
     end
 
     def test_counting_the_number_of_votes
-
       example_object_one = ExampleObject.new
       example_object_one.id = 123
 
       example_object_two = ExampleObject.new
       example_object_two.id = 456
 
-      ExampleTarget.send(:include, Pollable)
+      ExampleTarget.include Pollable
       ExampleTarget.send(:opinions, :example)
 
       example_target = ExampleTarget.new
@@ -62,10 +57,6 @@ module Opinions
       expected_opinion_two.persist
 
       assert_equal 2, example_target.example_votes.count
-
     end
-
-
   end
-
 end
