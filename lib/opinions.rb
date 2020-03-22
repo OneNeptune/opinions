@@ -44,11 +44,12 @@ module Opinions
       @target_constant = target_class_name.constantize
       @object_constant = object_class_name.constantize
       @backend_objects = Opinions.backend.read_key(key_name)
+      @object_instance = args[:object_instance]
     end
 
     def opinion
       # this is the opinionated object
-      object_instance = @target_constant.find(target_id)
+      object_instance = @object_instance || @target_constant.find(target_id)
 
       # these are the objects that are the target of the opinion
       objects = @object_constant.where(id: @backend_objects.keys).index_by(&:id)
@@ -253,8 +254,19 @@ module Opinions
           lookup_key_builder = KeyBuilder.new(object: self, opinion: opinion)
           keys = Opinions.backend.keys_matching(lookup_key_builder.key + '*')
           keys.collect do |key_name|
-            OpinionFactory.new(from_target: key_name).opinion
+            OpinionFactory.new(from_target: key_name, object_instance: self).opinion
           end.flatten.compact
+        end
+
+        send :define_method, :"fast_#{opinion}_count" do
+          if instance_variable_defined?("@fast_#{opinion}_count")
+            instance_variable_get("@fast_#{opinion}_count")
+          else
+            lookup_key_builder = KeyBuilder.new(object: self, opinion: opinion)
+            keys = Opinions.backend.keys_matching(lookup_key_builder.key + '*')
+            key_name = keys.first
+            instance_variable_set("@fast_#{opinion}_count", Opinions.backend.read_key(key_name).length)
+          end
         end
 
         send :define_method, :remove_votes do
